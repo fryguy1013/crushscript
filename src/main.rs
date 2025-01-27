@@ -21,6 +21,8 @@ mod codegen;
 mod running_modulo_optimization;
 mod slotted_array_read_optimization;
 
+static OUTPUT_FILE: &str = "tmp/out.cpp";
+
 #[derive(ClapParser, Debug)]
 struct Args {
     #[arg(required = true)]
@@ -34,11 +36,13 @@ struct Args {
 fn main() -> Result<(), String> {
     let args = Args::parse();
 
+    // read source file
     let name = args.input;
     let path = Path::new(&name);
     let source_text = fs::read_to_string(path).map_err(|_| format!("Missing '{name}'"))?;
     let source_type = SourceType::from_path(path).unwrap();
 
+    // parse source code into AST
     let allocator = Allocator::default();
     let mut errors = Vec::new();
 
@@ -63,7 +67,6 @@ fn main() -> Result<(), String> {
         .with_build_jsdoc(true)
         .with_cfg(true)
         .build(&program);
-
     errors.extend(semantic_errors);
 
     if panicked {
@@ -73,14 +76,17 @@ fn main() -> Result<(), String> {
         }
     }
 
+    // apply optimizations
     SlottedArrayReadOptimization::new(&allocator).visit_program(&mut program);
     RunningModuloOptimization::new(&semantic, &allocator).visit_program(&mut program);
 
-    let mut writer = File::create("tmp/out.cpp").unwrap();
+    // output source code
+    let mut writer = File::create(OUTPUT_FILE).unwrap();
     let mut codegen = Codegen::new(&mut writer, &semantic);
     codegen.print_program(&program);
     drop(writer);
 
+    // build program to executable
     build_program(&args.output);
 
     Ok(())
@@ -89,7 +95,7 @@ fn main() -> Result<(), String> {
 fn build_program(output: &str) {
     let hello = Command::new("cl")
         .args([
-            "tmp/out.cpp",
+            OUTPUT_FILE,
             "/O2",
             "/arch:SSE2",
             "/Istatic",
