@@ -20,7 +20,7 @@
                 }
             },
             "args": [
-                "benchmark/js/code.js"
+                "./benchmark/js/code.js"
             ],
             "cwd": "${workspaceFolder}"
         },
